@@ -3,7 +3,7 @@ import numpy as np
 import math
 
 class Device:
-    def __init__(self, id, data_to_send_kb, cqi):
+    def __init__(self, id, data_to_send_kb, cqi, type_movement, angle=None):
         self.id = id
         self.data_to_send_kb = data_to_send_kb
         self.data_to_send = 0
@@ -14,6 +14,64 @@ class Device:
         self.pf_metric = 0
         self.assigned_RBs = 0
         self.cqi = cqi
+        self.coordinateX = np.random.randint(-3000, 3000)
+        self.coordinateY = np.random.randint(-3000, 3000)
+        self.speed = np.random.randint(0, 10)
+        self.type_movement = type_movement
+        self.angle = angle
+        
+    def movement_model(self):
+        if self.type_movement == "linear":
+            if self.angle is None:
+                raise ValueError("Для линейного движения необходимо задать угол!")
+            
+            angle_rad = np.radians(self.angle)
+            delta_x = self.speed * np.cos(angle_rad)
+            delta_y = self.speed * np.sin(angle_rad)
+            
+            self.coordinateX += delta_x
+            self.coordinateY += delta_y
+        
+        if self.type_movement == "chaotic":
+            angle_deg = np.random.uniform(0, 360)
+            angle_rad = np.radians(angle_deg)
+            
+            delta_x = self.speed * np.cos(angle_rad)
+            delta_y = self.speed * np.sin(angle_rad)
+            
+            self.coordinateX += delta_x
+            self.coordinateY += delta_y
+        
+class ChannelModel:
+    def __init__(self, carrierFreq, bandwidth, hBS, hms):
+        self.carrierFreq = carrierFreq
+        self.bandwidth = bandwidth
+        self.hBS = hBS
+        self.hms = hms
+    
+    def COST231(self, f, hBS, hms, d):
+        A = 46.3
+        B = 33.9
+        a = 3.2 * (np.log10(11.75 * hms))**2 - 4.97
+        s = np.where(d >= 1, 44.9 - 6.55 * np.log10(f), (47.88 + 13.9 * np.log10(f) - 13.9 * np.log10(hBS)) * (1 / np.log10(50)))
+        Lclutter = 3
+        return A + B * np.log10(f) - 13.82 * np.log10(hBS) - a + s * np.log10(d) + Lclutter
+        
+    def calculateSINR(self, d, txPower, antGain):
+        PathLoss = self.COST231(self.f, self.hBS, self.hms, d)
+        PowerSignal = txPower - 2.9 + antGain - PathLoss - 1 - 15
+        PowerNoise = -174 * np.log10(self.bandwidth) + 2.4
+        SINR = PowerSignal - PowerNoise
+        return SINR
+        
+class BaseStation:
+    def __init__(self, coordinateX, coordinateY):
+        self.coordinateX = coordinateX
+        self.coordinateY = coordinateY
+        self.txPower = 46
+        self.antGain = 21
+        self.carrierFreq = 1800
+        self.height = 100
         
 class MAC_Scheduler:
     def __init__(self, num_subcarriers, devices, time_slots):
@@ -346,8 +404,20 @@ devices = [
 
 scheduler = MAC_Scheduler(num_subcarriers, devices, time_slots)
 scheduler.round_robin()
-scheduler.proportional_fair()
-scheduler.best_cqi()
 
-scheduler.plot_average_throughput()
-scheduler.plot_average_throughput_columns()
+for device in devices:
+    if device.id == 1:
+        print("X", device.coordinateX)
+        print("Y", device.coordinateY)
+        print("Speed", device.speed)
+        
+        device.movement_model()
+        
+        print("X", device.coordinateX)
+        print("Y", device.coordinateY)
+
+#scheduler.proportional_fair()
+#scheduler.best_cqi()
+
+#scheduler.plot_average_throughput()
+#scheduler.plot_average_throughput_columns()
